@@ -1,0 +1,16 @@
+DYNAMO,SOLUTION,CODE,INDICATOR,BASELINE,TARGET,MC1,MC2
+D04,Solution 1,TExT12.1,Touristic routes development,0,10,2,4
+D04,Solution 1,OTH52,New products reaching the market,1,3,1,2
+D04,Solution 2,TExT9.1,Visitors from outside the pilot area,5,20,7,12
+D04,Solution 2,TExT9.1.1,Young visitors from outside the pilot area,2,8,3,5
+D05,Solution 3,TExT9.1.2,Older visitors from outside the pilot area,3,9,4,6
+D05,Solution 3,TExT9.1.3,Visitors with disabilities,1,5,2,4
+D04,Solution 3,CS04362,Number of interviews,0,100,20,30
+D04,Solution 3,CS04362.1,Number of interviews: Young people 18<x>29 years),0,50,5,10
+D04,Solution 3,CS04362.2,Number of interviews: Older people (>65 year),0,50,15,20
+D04,Solution 3,CS04362.3,Number of interviews: People with disabilities,0,N/A,2,3
+D04,Solution 3,CS04362.4,Number of interviews: Long-term unemployed,0,N/A,10,15
+D04,Solution 3,CS04362.5,"Number of interviews: Migrants and linguistic, ethnic and religious minorities",0,N/A,5,15
+D04,Solution 3,CS04362.6,Number of interviews: LGBTQIA+ people,0,N/A,5,9
+D04,Solution 3,CS04362.7,Number of interviews: Female,0,N/A,8,12
+D04,Solution 3,CS04362.8,Number of interviews: Male,0,N/A,7,9

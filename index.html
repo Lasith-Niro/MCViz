@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring Campaign Visualizer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.32.0/plotly.min.js"></script>
+<style>
+:root{--bg:#fff;--panel:#f7f8fa;--border:#e2e5ea;--text:#1a1d23;--muted:#6b7280;--accent:#2563eb;--accent2:#f0f4ff;}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#14161b;--panel:#1c1f26;--border:#2b2f38;--text:#e8eaed;--muted:#9aa1ad;--accent:#5b8def;--accent2:#1e2636;}}
+:root[data-theme="dark"]{--bg:#14161b;--panel:#1c1f26;--border:#2b2f38;--text:#e8eaed;--muted:#9aa1ad;--accent:#5b8def;--accent2:#1e2636;}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;}
+header{padding:18px 22px;border-bottom:1px solid var(--border);}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;}
+header h1{margin:0;font-size:18px;}
+header p{margin:4px 0 0;color:var(--muted);font-size:13px;}
+.headerCopy{min-width:0;}
+.themeToggle{flex:0 0 auto;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);cursor:pointer;font-size:12px;}
+.themeToggle:hover{border-color:var(--accent);}
+#layout{display:flex;gap:16px;padding:16px 22px;align-items:flex-start;flex-wrap:wrap;}
+#panel{flex:0 0 300px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;max-width:100%;}
+#chartWrap{flex:1 1 500px;min-width:280px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;min-height:520px;}
+#chart{width:100%;height:520px;}
+label.field{display:block;margin:10px 0 4px;font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+select,input[type=text]{width:100%;padding:7px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;}
+.dropzone{border:2px dashed var(--border);border-radius:10px;padding:26px;text-align:center;color:var(--muted);cursor:pointer;margin:16px 22px;}
+.dropzone.drag{border-color:var(--accent);background:var(--accent2);}
+.chiplist{max-height:150px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--bg);}
+.chiplist label{display:flex;gap:6px;align-items:center;padding:3px 2px;font-size:13px;cursor:pointer;}
+.rowbtns{display:flex;gap:6px;margin-top:6px;}
+.rowbtns button{flex:1;padding:5px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;font-size:12px;}
+.rowbtns button:hover{border-color:var(--accent);}
+.referenceControls{display:flex;gap:12px;margin-top:10px;font-size:12px;color:var(--muted);}
+.referenceControls label{display:flex;gap:5px;align-items:center;cursor:pointer;}
+#coldetect{font-size:12px;color:var(--muted);margin-top:14px;border-top:1px solid var(--border);padding-top:10px;}
+#coldetect table{width:100%;border-collapse:collapse;}
+#coldetect td{padding:2px 0;}
+.badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;}
+.badge.num{background:#dbeafe;color:#1e40af;}
+.badge.txt{background:#fde68a;color:#92400e;}
+#msg{color:var(--muted);text-align:center;padding-top:180px;font-size:14px;}
+#app{display:none;}
+#previewWrap{margin:16px 22px 0;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;overflow:auto;}
+#previewWrap h3{margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+#previewTable{border-collapse:collapse;font-size:12px;width:100%;}
+#previewTable th,#previewTable td{border:1px solid var(--border);padding:4px 8px;text-align:left;white-space:nowrap;}
+#previewTable th{background:var(--accent2);position:sticky;top:0;}
+</style>
+</head>
+<body>
+<header>
+<div class="headerCopy">
+  <h1>📊 Monitoring Campaign Visualizer</h1>
+  <p>Upload a dataset → pick indicators, campaigns and a chart → see it instantly.</p>
+</div>
+<button class="themeToggle" id="themeToggle" type="button" aria-pressed="false"></button>
+</header>
+
+<div id="dropzone" class="dropzone">Drop a CSV here, or click to choose a file</div>
+<input type="file" id="fileInput" accept=".csv" style="display:none">
+
+<div id="previewWrap" style="display:none">
+  <h3>Data preview <span id="previewCount" style="text-transform:none;letter-spacing:0"></span></h3>
+  <div style="max-height:220px;overflow:auto"><table id="previewTable"></table></div>
+</div>
+
+<div id="app">
+<div id="layout">
+  <div id="panel">
+    <label class="field">Label indicators by</label>
+    <select id="labelCol"></select>
+
+    <label class="field">Group / colour by</label>
+    <select id="groupCol"></select>
+
+    <label class="field">Indicators <span id="indCount" style="color:var(--muted);font-weight:400"></span></label>
+    <input type="text" id="indSearch" placeholder="Search indicators…">
+    <div class="chiplist" id="indList"></div>
+    <div class="rowbtns"><button id="selAll">Select all</button><button id="selNone">Select none</button></div>
+
+    <label class="field">Monitoring campaigns / metrics</label>
+    <div class="chiplist" id="metricList" style="max-height:110px"></div>
+
+    <label class="field">Visualization</label>
+    <select id="chartType"></select>
+    <div class="referenceControls">
+      <label><input type="checkbox" id="showBaseline"> Baseline</label>
+      <label><input type="checkbox" id="showTarget"> Target</label>
+    </div>
+
+    <div id="coldetect"></div>
+  </div>
+  <div id="chartWrap">
+    <div id="chart"></div>
+    <div id="chartMsg" style="text-align:center;color:var(--muted);padding:10px;font-size:13px;"></div>
+  </div>
+</div>
+</div>
+
+<script>
+const MISSING = new Set(["-","tbd","n/a","na",""]);
+function toNum(v){
+  if(v===null||v===undefined) return NaN;
+  const s = String(v).trim();
+  if(MISSING.has(s.toLowerCase())) return NaN;
+  const n = parseFloat(s.replace(/,/g,"").replace(/%/g,""));
+  return isNaN(n) ? NaN : n;
+}
+
+let RAW = [], HEADERS = [], COLTYPE = {}, ROWS = [];
+
+const dz = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const themeToggle = document.getElementById('themeToggle');
+const savedTheme = localStorage.getItem('monitoring-visualizer-theme');
+if(savedTheme === 'light' || savedTheme === 'dark') document.documentElement.dataset.theme = savedTheme;
+function updateThemeToggle(){
+  const dark = document.documentElement.dataset.theme === 'dark' ||
+    (!document.documentElement.dataset.theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  themeToggle.textContent = dark ? 'Use light mode' : 'Use dark mode';
+  themeToggle.setAttribute('aria-pressed', dark ? 'true' : 'false');
+}
+themeToggle.addEventListener('click', ()=>{
+  const dark = document.documentElement.dataset.theme !== 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  localStorage.setItem('monitoring-visualizer-theme', dark ? 'dark' : 'light');
+  updateThemeToggle();
+});
+updateThemeToggle();
+dz.addEventListener('click', ()=>fileInput.click());
+dz.addEventListener('dragover', e=>{e.preventDefault(); dz.classList.add('drag');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('drag'));
+dz.addEventListener('drop', e=>{e.preventDefault(); dz.classList.remove('drag'); if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);});
+fileInput.addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file){
+  Papa.parse(file, {
+    header:true, skipEmptyLines:true, encoding:"UTF-8",
+    complete: res => { init(res.data, res.meta.fields); }
+  });
+}
+
+function init(data, fields){
+  HEADERS = fields.filter(h => h && !/^unnamed/i.test(h.trim())).map(h=>h.trim());
+  RAW = data;
+  // detect column types
+  COLTYPE = {};
+  HEADERS.forEach(h=>{
+    let nonEmpty=0, numeric=0;
+    RAW.forEach(r=>{
+      const raw = r[h];
+      if(raw===undefined||raw===null||String(raw).trim()==="") return;
+      nonEmpty++;
+      if(!isNaN(toNum(raw))) numeric++;
+    });
+    COLTYPE[h] = (nonEmpty>0 && numeric/nonEmpty>=0.6) ? 'num' : 'txt';
+  });
+  const numCols = HEADERS.filter(h=>COLTYPE[h]==='num');
+  const txtCols = HEADERS.filter(h=>COLTYPE[h]==='txt');
+
+  // build clean row objects
+  ROWS = RAW.map((r,i)=>{
+    const o = {_i:i};
+    HEADERS.forEach(h=> o[h] = COLTYPE[h]==='num' ? toNum(r[h]) : (r[h]||'').toString().trim());
+    return o;
+  });
+
+  renderPreview();
+  renderColDetect(numCols, txtCols);
+  populateSelect('labelCol', txtCols, pickLabelCol(txtCols));
+  populateSelect('groupCol', txtCols, pickGroupCol(txtCols, document.getElementById('labelCol').value));
+  populateMetrics(numCols);
+  populateChartTypes();
+  configureReferenceControls();
+  buildIndicatorList();
+
+  document.getElementById('dropzone').style.display='none';
+  document.getElementById('app').style.display='block';
+
+  ['labelCol','groupCol'].forEach(id=>document.getElementById(id).addEventListener('change', ()=>{buildIndicatorList(); render();}));
+  document.getElementById('chartType').addEventListener('change', render);
+  document.getElementById('showBaseline').addEventListener('change', render);
+  document.getElementById('showTarget').addEventListener('change', render);
+  document.getElementById('indSearch').addEventListener('input', filterIndList);
+  document.getElementById('selAll').addEventListener('click', ()=>{setAllInd(true); render();});
+  document.getElementById('selNone').addEventListener('click', ()=>{setAllInd(false); render();});
+  render();
+}
+
+function pickLabelCol(txtCols){
+  let best=txtCols[0], bestU=0;
+  txtCols.forEach(h=>{ const u=new Set(ROWS.map(r=>r[h])).size; if(u>bestU){bestU=u;best=h;} });
+  return best;
+}
+function pickGroupCol(txtCols, labelCol){
+  const cands = txtCols.filter(h=>h!==labelCol);
+  let best=cands[0], bestScore=-1;
+  cands.forEach(h=>{ const u=new Set(ROWS.map(r=>r[h])).size; const score = (u>=2&&u<=25)? (100-u) : -1; if(score>bestScore){bestScore=score;best=h;} });
+  return best || labelCol;
+}
+function populateSelect(id, opts, def){
+  const el=document.getElementById(id); el.innerHTML='';
+  opts.forEach(o=>{ const op=document.createElement('option'); op.value=o; op.textContent=o; if(o===def) op.selected=true; el.appendChild(op); });
+}
+function populateMetrics(numCols){
+  const el=document.getElementById('metricList'); el.innerHTML='';
+  const mcLike = numCols.filter(h=>/^mc\s*\d+$/i.test(h));
+  const defaultOn = mcLike.length ? mcLike : numCols.slice(0, Math.min(2,numCols.length));
+  numCols.forEach(h=>{
+    const lab=document.createElement('label');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.value=h; cb.checked=defaultOn.includes(h);
+    cb.addEventListener('change', render);
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(' '+h));
+    el.appendChild(lab);
+  });
+}
+function populateChartTypes(){
+  const groups = {
+    'Comparison': ['Bar','Column','Grouped Bar','Stacked Bar','Lollipop','Stacked vs Baseline/Target'],
+    'Trend': ['Line','Area'],
+    'Part-to-Whole': ['Pie','Donut','Treemap','Sankey'],
+    'Distribution': ['Histogram','Box Plot','Violin Plot'],
+    'Relationship': ['Scatter','Bubble','Heatmap']
+  };
+  const el=document.getElementById('chartType'); el.innerHTML='';
+  Object.entries(groups).forEach(([g,items])=>{
+    const og=document.createElement('optgroup'); og.label=g;
+    items.forEach(it=>{ const op=document.createElement('option'); op.value=it; op.textContent=it; og.appendChild(op); });
+    el.appendChild(og);
+  });
+  el.value='Bar';
+}
+function configureReferenceControls(){
+  const baseline = document.getElementById('showBaseline');
+  const target = document.getElementById('showTarget');
+  baseline.disabled = !HEADERS.some(h=>/^baseline$/i.test(h));
+  target.disabled = !HEADERS.some(h=>/^target$/i.test(h));
+  baseline.checked = !baseline.disabled;
+  target.checked = !target.disabled;
+}
+function currentLabelCol(){return document.getElementById('labelCol').value;}
+function currentGroupCol(){return document.getElementById('groupCol').value;}
+function labelFor(r){ const g=currentGroupCol(), l=currentLabelCol(); return g && g!==l ? `${r[g]} · ${r[l]}` : String(r[l]); }
+
+function buildIndicatorList(){
+  const el=document.getElementById('indList');
+  const existing = [...el.querySelectorAll('input:checked')].map(cb=>parseInt(cb.dataset.idx));
+  const hasExistingList = el.querySelectorAll('input').length > 0;
+  const selected = new Set(existing);
+  const total = ROWS.length;
+  el.innerHTML='';
+  ROWS.forEach(r=>{
+    const lab=document.createElement('label');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.dataset.idx=r._i;
+    cb.checked = hasExistingList ? selected.has(r._i) : total<=25;
+    cb.addEventListener('change', render);
+    lab.appendChild(cb);
+    const span=document.createElement('span'); span.textContent=labelFor(r); span.title=span.textContent;
+    lab.appendChild(span);
+    lab.dataset.text = span.textContent.toLowerCase();
+    el.appendChild(lab);
+  });
+  document.getElementById('indCount').textContent = `(${total})`;
+}
+function filterIndList(){
+  const q=document.getElementById('indSearch').value.toLowerCase();
+  document.querySelectorAll('#indList label').forEach(l=>{ l.style.display = l.dataset.text.includes(q) ? 'flex':'none'; });
+}
+function setAllInd(v){ document.querySelectorAll('#indList input[type=checkbox]').forEach(cb=>{ if(cb.closest('label').style.display!=='none') cb.checked=v; }); }
+
+function selectedRows(){
+  const idxs = [...document.querySelectorAll('#indList input:checked')].map(cb=>parseInt(cb.dataset.idx));
+  return ROWS.filter(r=>idxs.includes(r._i));
+}
+function selectedMetrics(){ return [...document.querySelectorAll('#metricList input:checked')].map(cb=>cb.value); }
+
+function renderPreview(){
+  const wrap = document.getElementById('previewWrap');
+  const table = document.getElementById('previewTable');
+  const n = Math.min(8, RAW.length);
+  document.getElementById('previewCount').textContent = `— showing ${n} of ${RAW.length} rows, ${HEADERS.length} columns`;
+  let html = '<thead><tr>' + HEADERS.map(h=>`<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+  for(let i=0;i<n;i++){
+    html += '<tr>' + HEADERS.map(h=>`<td>${(RAW[i][h]??'').toString() || '<span style="color:var(--muted)">–</span>'}</td>`).join('') + '</tr>';
+  }
+  html += '</tbody>';
+  table.innerHTML = html;
+  wrap.style.display = 'block';
+}
+function renderColDetect(numCols, txtCols){
+  const el=document.getElementById('coldetect');
+  let html = `<div><strong>Detected columns</strong> (${HEADERS.length}), ${ROWS.length} rows</div><table>`;
+  HEADERS.forEach(h=>{ html+=`<tr><td>${h}</td><td style="text-align:right"><span class="badge ${COLTYPE[h]}">${COLTYPE[h]==='num'?'number':'text'}</span></td></tr>`; });
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+function setMsg(t){ document.getElementById('chartMsg').textContent = t || ''; }
+
+function render(){
+  const rows = selectedRows();
+  const metrics = selectedMetrics();
+  const type = document.getElementById('chartType').value;
+  const group = currentGroupCol();
+  const baseline = HEADERS.find(h=>/^baseline$/i.test(h));
+  const target = HEADERS.find(h=>/^target$/i.test(h));
+  const showBaseline = document.getElementById('showBaseline').checked;
+  const showTarget = document.getElementById('showTarget').checked;
+  Plotly.purge('chart');
+  setMsg('');
+  if(rows.length===0){ setMsg('Select at least one indicator.'); return; }
+  if(metrics.length===0){ setMsg('Select at least one metric/campaign.'); return; }
+
+  const labels = rows.map(labelFor);
+  const layoutBase = {margin:{t:30,l:140,r:20,b:60}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    font:{color:getComputedStyle(document.body).getPropertyValue('--text')||'#333'}, legend:{orientation:'h'}};
+  let data=[], layout=Object.assign({title:type}, layoutBase);
+
+  if(type==='Stacked Bar'){
+    data = metrics.map(m=>({type:'bar', name:m, orientation:'h', x:rows.map(r=>r[m]), y:labels}));
+    layout.barmode='stack';
+    layout.title='Stacked campaign results';
+    layout.margin.l=160;
+  } else if(type==='Stacked vs Baseline/Target'){
+    const campaignMetrics = metrics.filter(m=>!/^baseline$/i.test(m) && !/^target$/i.test(m));
+    const baseline = HEADERS.find(h=>/^baseline$/i.test(h));
+    const target = HEADERS.find(h=>/^target$/i.test(h));
+    if(campaignMetrics.length===0){ setMsg('Select at least one campaign metric.'); return; }
+    if(!baseline && !target){ setMsg('Dataset needs Baseline and/or Target columns.'); return; }
+    data = campaignMetrics.map(m=>({type:'bar', name:m, x:labels, y:rows.map(r=>r[m]), hovertemplate:`${m}: %{y}<extra></extra>`}));
+    if(baseline && showBaseline){ data.push({type:'scatter', mode:'markers', name:'Baseline', x:labels, y:rows.map(r=>r[baseline]), marker:{color:'#6b7280',size:9,symbol:'diamond'}, hovertemplate:'Baseline: %{y}<extra></extra>'}); }
+    if(target && showTarget){ data.push({type:'scatter', mode:'markers', name:'Target', x:labels, y:rows.map(r=>r[target]), marker:{color:'#dc2626',size:10,symbol:'line-ns-open'}, hovertemplate:'Target: %{y}<extra></extra>'}); }
+    layout.barmode='stack';
+    layout.title='Accumulated campaign results vs baseline and target';
+    layout.margin.l=60;
+    layout.xaxis={title:'Indicator', tickangle: labels.length>8 ? -45 : 0};
+    layout.yaxis={title:'Result'};
+  } else if(type==='Bar' || type==='Column'){
+    const horiz = type==='Bar';
+    data = metrics.map(m=>({ type:'bar', name:m, orientation: horiz?'h':'v',
+      x: horiz? rows.map(r=>r[m]) : labels, y: horiz? labels : rows.map(r=>r[m]) }));
+    layout.barmode = metrics.length>1?'group':undefined;
+    layout.margin.l = horiz?160:60;
+  } else if(type==='Grouped Bar'){
+    const groups = [...new Set(rows.map(r=>r[group]))];
+    data = metrics.map(m=>({ type:'bar', name:m, x:groups,
+      y: groups.map(g=> rows.filter(r=>r[group]===g).reduce((s,r)=>s+(isNaN(r[m])?0:r[m]),0)) }));
+    layout.barmode='group';
+  } else if(type==='Lollipop'){
+    data = metrics.map((m,mi)=>({ type:'scatter', mode:'markers', name:m,
+      x: rows.map(r=>r[m]), y: labels.map(l=>l+(metrics.length>1?'  ':'')), marker:{size:11} }));
+    layout.shapes = [];
+    rows.forEach((r,ri)=>metrics.forEach(m=>{ if(!isNaN(r[m])) layout.shapes.push({type:'line',x0:0,x1:r[m],y0:labels[ri],y1:labels[ri],line:{color:'#c9ccd3',width:2}}); }));
+    layout.margin.l=160;
+  } else if(type==='Line' || type==='Area'){
+    if(metrics.length<2){ setMsg('Pick 2+ metrics/campaigns to show a trend.'); return; }
+    data = rows.map(r=>({ type:'scatter', mode:'lines+markers', name:labelFor(r),
+      x:metrics, y:metrics.map(m=>r[m]), fill: type==='Area'?'tozeroy':undefined }));
+  } else if(type==='Pie' || type==='Donut'){
+    const m=metrics[0];
+    data = [{type:'pie', labels, values: rows.map(r=>r[m]), hole: type==='Donut'?0.55:0}];
+    layout.title = `${m} share`;
+  } else if(type==='Treemap'){
+    const m=metrics[0];
+    data = [{type:'treemap', labels, parents: rows.map(r=>String(r[group])), values: rows.map(r=>isNaN(r[m])?0:r[m])}];
+  } else if(type==='Sankey'){
+    const m=metrics[0];
+    const groups=[...new Set(rows.map(r=>r[group]))];
+    const nodes=[...groups, ...labels]; const idx={}; nodes.forEach((n,i)=>idx[n+ (labels.includes(n)&&groups.includes(n)?'_x':'')]=i);
+    const nodeLabels = [...groups, ...labels];
+    const src=[], tgt=[], val=[];
+    rows.forEach((r,ri)=>{ src.push(groups.indexOf(r[group])); tgt.push(groups.length+ri); val.push(isNaN(r[m])?0:r[m]); });
+    data=[{type:'sankey', node:{label:nodeLabels, pad:12, thickness:14}, link:{source:src,target:tgt,value:val}}];
+    layout.title=`Flow of ${m}`;
+  } else if(type==='Histogram'){
+    const m=metrics[0];
+    data = [{type:'histogram', x: rows.map(r=>r[m]).filter(v=>!isNaN(v)), nbinsx:20}];
+    layout.title=`Distribution of ${m}`;
+  } else if(type==='Box Plot' || type==='Violin Plot'){
+    data = metrics.map(m=>({ type: type==='Box Plot'?'box':'violin', name:m,
+      x: rows.map(r=>r[group]), y: rows.map(r=>r[m]), box: type==='Violin Plot'?{visible:true}:undefined, points:'all' }));
+    layout.boxmode='group'; layout.violinmode='group';
+  } else if(type==='Scatter'){
+    if(metrics.length<2){ setMsg('Pick exactly 2 metrics for a scatter plot.'); return; }
+    const [mx,my]=metrics;
+    data=[{type:'scatter', mode:'markers', x:rows.map(r=>r[mx]), y:rows.map(r=>r[my]), text:labels,
+      marker:{size:9, color: rows.map(r=>r[group]), colorscale:'Viridis'}}];
+    layout.xaxis={title:mx}; layout.yaxis={title:my};
+  } else if(type==='Bubble'){
+    if(metrics.length<3){ setMsg('Pick exactly 3 metrics: x, y, and bubble size.'); return; }
+    const [mx,my,ms]=metrics;
+    const sizes = rows.map(r=>r[ms]); const maxS=Math.max(...sizes.filter(v=>!isNaN(v)),1);
+    data=[{type:'scatter', mode:'markers', x:rows.map(r=>r[mx]), y:rows.map(r=>r[my]), text:labels,
+      marker:{size: sizes.map(v=>isNaN(v)?6:8+40*v/maxS), sizemode:'diameter'}}];
+    layout.xaxis={title:mx}; layout.yaxis={title:my};
+  } else if(type==='Heatmap'){
+    data=[{type:'heatmap', x:metrics, y:labels, z: rows.map(r=>metrics.map(m=>r[m])), colorscale:'RdYlGn'}];
+  }
+
+  if(['Bar','Column','Stacked Bar','Lollipop'].includes(type)){
+    const horizontal = type==='Bar' || type==='Stacked Bar' || type==='Lollipop';
+    // const addReference = (name, column, color, symbol) => data.push(horizontal
+    //   ? {type:'scatter', mode:'markers', name, orientation:'h', x:rows.map(r=>r[column]), y:labels, marker:{color,size:9,symbol}, hovertemplate:`${name}: %{x}<extra></extra>`}
+    //   : {type:'scatter', mode:'markers', name, x:labels, y:rows.map(r=>r[column]), marker:{color,size:9,symbol}, hovertemplate:`${name}: %{y}<extra></extra>`});
+    // if(baseline && showBaseline) addReference('Baseline', baseline, '#6b7280', 'diamond');
+    // if(target && showTarget) addReference('Target', target, '#dc2626', 'line-ns-open');
+    const addReference = (name, column, color, symbolHorizontal, symbolVertical) => {
+    const symbol = horizontal ? symbolHorizontal : symbolVertical;
+    data.push(horizontal
+      ? {
+          type: 'scatter', 
+          mode: 'markers', 
+          name, 
+          orientation: 'h', 
+          x: rows.map(r => r[column]), 
+          y: labels, 
+          marker: { color, size: 11, symbol, line: { width: 2, color } }, 
+          hovertemplate: `${name}: %{x}<extra></extra>`
+        }
+      : {
+          type: 'scatter', 
+          mode: 'markers', 
+          name, 
+          x: labels, 
+          y: rows.map(r => r[column]), 
+          marker: { color, size: 11, symbol, line: { width: 2, color } }, 
+          hovertemplate: `${name}: %{y}<extra></extra>`
+        }
+    );
+  };
+
+  // Target uses vertical line for vertical bars, horizontal line for horizontal bars
+  if (baseline && showBaseline) addReference('Baseline', baseline, '#4b5563', 'diamond', 'diamond');
+  if (target && showTarget) addReference('Target', target, '#dc2626', 'line-ns-open', 'line-ew-open');
+  }
+
+  Plotly.newPlot('chart', data, layout, {responsive:true, displaylogo:false});
+}
+</script>
+</body>
+</html>
