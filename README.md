@@ -158,17 +158,6 @@ For a quick test, open the HTML file and upload
 `sample_data/monitoring_no_nulls.csv`. It contains `BASELINE`, `TARGET`, `MC1`,
 and `MC2`, so all comparison features can be tested immediately.
 
-## Publishing only the HTML
-
-To publish the visualizer, provide this file:
-
-```text
-monitoring-visualizer.html
-```
-
-No Python environment, Streamlit server, build step, or backend is required.
-Keep the CDN script URLs in the HTML, or replace them with local copies of
-Papa Parse and Plotly if the published environment cannot access the internet.
 
 ## Limitations
 
@@ -179,101 +168,5 @@ Papa Parse and Plotly if the published environment cannot access the internet.
   characters are removed.
 - The visualizer does not save uploaded data or chart settings between page
   loads.
-# Monitoring Campaign Data Visualization Platform
 
-A local Streamlit app for exploring EU-project monitoring-campaign data
-(BASELINE / TARGET / MC1 / MC2 per indicator), with 18 chart types and an
-optional local-LLM assistant (Ollama + `qwen2.5:7b`) for chart suggestions
-and quick Q&A.
 
-## 1. Setup
-
-```bash
-cd dashboard
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Optional: local AI assistant (Ollama)
-
-The AI Assistant tab is optional — the rest of the dashboard works without it.
-
-```bash
-# install Ollama: https://ollama.com/download
-ollama pull qwen2.5:7b
-ollama serve            # usually already running as a background service
-```
-
-The app talks to `http://localhost:11434` by default (editable in the
-sidebar). Nothing about your data is sent anywhere except your own machine.
-
-## 2. Run
-
-```bash
-streamlit run app.py
-```
-
-Then open the URL Streamlit prints (usually http://localhost:8501).
-
-## 3. Expected CSV format
-
-The app expects the same layout every time:
-
-| DYNAMO | SOLUTION | CODE | INDICATOR | *(blank col)* | BASELINE | TARGET | MC1 | MC2 |
-|---|---|---|---|---|---|---|---|---|
-
-- `MC1` = value recorded at Monitoring Campaign 1
-- `MC2` = **accumulated** value recorded at Monitoring Campaign 2 (already
-  includes MC1's contribution)
-- Cells containing `-`, `TBD`, `N/A`, or left blank are treated as missing
-  data, not zero
-- A bundled sample file (`sample_data/D04_mc2.csv`) is available from the
-  sidebar for a quick test drive
-
-## 4. What's inside
-
-```
-dashboard/
-├── app.py                 # Streamlit UI (filters, tabs, AI assistant)
-├── utils/
-│   ├── data_utils.py       # CSV loading, cleaning, derived stats
-│   ├── charts.py            # One function per chart type (Plotly)
-│   └── ollama_utils.py       # Local Ollama client
-├── sample_data/D04_mc2.csv
-└── requirements.txt
-```
-
-### Chart types, by category
-
-- **Comparison**: Bar, Column, Grouped Bar, Lollipop
-- **Trend / Time**: Line (Baseline→MC1→MC2→Target), Area, Progress Gantt,
-  Candlestick
-- **Part-to-Whole**: Pie, Donut, Treemap
-- **Distribution**: Histogram, Box Plot, Violin Plot
-- **Relationship**: Scatter, Bubble, Heatmap, Sankey
-
-Two chart types don't map naturally onto this data and are explicitly
-adapted rather than faked, with a note in the UI:
-- **Progress Gantt**: since there are no dates, bars run 0 → Target and
-  fill to the latest recorded value instead of showing a schedule.
-- **Candlestick**: Baseline/Target/observed values are mapped onto
-  Open/High/Low/Close per indicator purely as a visual reuse of the form —
-  it is not a real price series.
-
-### Derived fields
-
-`data_utils.load_monitoring_csv` adds a few computed columns you'll see in
-the data table and use across charts:
-
-- `LATEST_VALUE` / `LATEST_CAMPAIGN`: MC2 if present, else MC1
-- `PROGRESS_PCT`: `(latest − baseline) / (target − baseline) × 100`
-- `STATUS`: `Target reached` / `On track` (≥50%) / `Behind` (<50%) /
-  `In progress` / `No target` / `No data`
-
-## 5. Extending
-
-- Add a new chart: write a function in `utils/charts.py` returning a
-  Plotly figure, then wire it into the matching tab in `app.py`.
-- Swap the LLM model: change the "Model" field in the sidebar to any model
-  you've pulled with `ollama pull <name>`.
